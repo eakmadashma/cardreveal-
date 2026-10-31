@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Card Reveal">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Card Reveal</title>
+<style>
+:root{--bg:#f4f4f7;--fg:#14141a;--panel:#fff;--muted:#6b6b78;--accent:#5b5bd6;--accent-fg:#fff;--line:#d9d9e2;--c1:#e6e6ee;--c2:#f6f6fa;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111116;--fg:#ececf3;--panel:#1c1c24;--muted:#9a9aa8;--accent:#8585f0;--accent-fg:#101018;--line:#33333f;--c1:#2a2a34;--c2:#22222b}}
+:root[data-theme="dark"]{--bg:#111116;--fg:#ececf3;--panel:#1c1c24;--muted:#9a9aa8;--accent:#8585f0;--accent-fg:#101018;--line:#33333f;--c1:#2a2a34;--c2:#22222b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent}
+main{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:26px;margin:8px 0 4px}
+p.sub{color:var(--muted);margin:0 0 18px}
+.slot{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.slot h2{font-size:16px;margin:0}
+.slot small{color:var(--muted)}
+.row{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.thumb{width:72px;height:100px;border-radius:8px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;overflow:hidden;color:var(--muted);font-size:12px;background:repeating-conic-gradient(var(--c1) 0 25%,var(--c2) 0 50%) 0 0/16px 16px}
+.thumb img{max-width:100%;max-height:100%;object-fit:contain}
+.btn{appearance:none;border:1px solid var(--line);background:var(--panel);color:var(--fg);padding:10px 14px;border-radius:12px;font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
+.btn.big{width:100%;padding:15px;font-size:17px;margin-top:6px}
+.btn[disabled]{opacity:.4}
+select,input[type=number]{font:inherit;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+input[type=file]{display:none}
+.chk{display:flex;gap:8px;align-items:center;margin-top:10px}
+.tip{color:var(--muted);font-size:13px;margin-top:14px}
+.full{position:fixed;inset:0;display:none;z-index:20}
+.full.show{display:block}
+/* crop editor */
+#crop{background:var(--bg);flex-direction:column;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) 12px calc(env(safe-area-inset-bottom,0px) + 10px)}
+#crop.show{display:flex}
+#crop p{margin:0;color:var(--muted);font-size:14px;text-align:center}
+#cw{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#000}
+#cc{max-width:100%;max-height:100%;touch-action:none;display:block}
+.tools{display:flex;gap:8px;justify-content:center;align-items:center}
+/* calibrate + perform */
+#cal,#perform{background:#000;overflow:hidden;touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+#perform{z-index:50}
+#pbg{position:absolute;inset:0;background:#000 center/cover no-repeat}
+.cardimg{position:absolute;left:0;top:0;will-change:transform;pointer-events:none}
+#calcard{outline:2px dashed #fff;outline-offset:-2px;opacity:.6}
+#calui{position:absolute;left:0;right:0;bottom:0;padding:12px 12px calc(env(safe-area-inset-bottom,0px) + 12px);display:flex;flex-direction:column;gap:8px;align-items:center;color:#fff;font-size:14px;text-align:center}
+#calhelp{position:absolute;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 0;color:#fff;font-size:13px;text-align:center}
+#cal .btn{background:#222;color:#fff;border-color:#444}
+#cal .btn.primary{background:var(--accent);color:var(--accent-fg)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Card Reveal</h1>
+  <p class="sub">A real-size photo of your card on screen, sitting over the real card behind your phone.</p>
+
+  <div class="slot">
+    <h2>1. Your object</h2><small>Choose the size and shape first, then photograph it flat and well lit and mark its four corners.</small>
+    <div class="row">
+      <label>Size <select id="type"></select></label>
+      <label>Shape <select id="shape"><option value="sharp">Square corners</option><option value="round">Rounded corners</option><option value="circle">Circle / oval</option></select></label>
+      <span id="customrow" style="display:none"><label>Width <input type="number" id="cw" min="5" max="120" step="0.1" style="width:84px"> mm</label> <label>Height <input type="number" id="ch" min="5" max="120" step="0.1" style="width:84px"> mm</label></span>
+    </div>
+    <div class="row">
+      <div class="thumb" id="t-card">None</div>
+      <label class="btn">Camera<input type="file" accept="image/*" capture="environment" data-k="card"></label>
+      <label class="btn">Library<input type="file" accept="image/*" data-k="card"></label>
+      <button class="btn" id="clr-card">Clear</button>
+    </div>
+  </div>
+
+  <div class="slot">
+    <h2>2. Background (optional)</h2><small>A photo of whatever is under the phone, like your table. Plain black if empty.</small>
+    <div class="row">
+      <div class="thumb" id="t-bg">None</div>
+      <label class="btn">Camera<input type="file" accept="image/*" capture="environment" data-k="bg"></label>
+      <label class="btn">Library<input type="file" accept="image/*" data-k="bg"></label>
+      <button class="btn" id="clr-bg">Clear</button>
+    </div>
+  </div>
+
+  <div class="slot">
+    <h2>3. Match real life</h2><small>Do this once so the on-screen card is exactly the size of a real card, in the spot where you hold it.</small>
+    <div class="row"><button class="btn" id="calbtn">Calibrate size and position</button></div>
+    <div class="chk"><input type="checkbox" id="lock"><label for="lock">Lock dragging to one direction at a time</label></div>
+    <div class="chk"><input type="checkbox" id="fin"><label for="fin">Finish the pull-out automatically when I let go</label></div>
+    <div class="chk"><label for="dur">Slide-off time</label><input type="range" id="dur" min="120" max="700" step="10" style="flex:1"><span id="durv"></span></div>
+    <div class="chk"><label for="low">Start lower by</label><input type="range" id="low" min="0" max="200" step="2" style="flex:1"><span id="lowv"></span></div>
+    <div class="chk"><input type="checkbox" id="quit"><label for="quit">Close the app after the card is pulled out (needs auto-finish on; installed app only)</label></div>
+    <div class="chk"><label for="qd">Close delay</label><input type="range" id="qd" min="0" max="3000" step="50" style="flex:1"><span id="qdv"></span></div>
+    <div class="tip" id="scaleinfo"></div>
+  </div>
+
+  <button class="btn primary big" id="go" disabled>Perform</button>
+  <p class="tip">While performing: drag with one finger. Tap with two fingers to put the card back in place, or hold two fingers for a second to exit. Calibrate and perform from the Home Screen icon (Share, then Add to Home Screen) so Safari’s bars don’t shift the position.</p>
+</main>
+
+<div class="full" id="crop">
+  <p>Drag the four dots onto the corners of the object. For a coin, use the corners of an imaginary square that just touches it. The orange edge becomes the top, so tap Rotate to turn it.</p>
+  <div id="cw"><canvas id="cc"></canvas></div>
+  <div class="tools"><button class="btn" id="cCancel">Cancel</button><button class="btn" id="cRot">Rotate</button><button class="btn primary" id="cDone">Done</button></div>
+</div>
+
+<div class="full" id="cal">
+  <div id="calhelp">Hold a real card flat against the screen where you normally hold it. Drag the outline and adjust the size until the real card’s edges match exactly.</div>
+  <img class="cardimg" id="calcard" alt="">
+  <div id="calui">
+    <div id="calread"></div>
+    <div class="tools"><button class="btn" id="smin">Smaller</button><button class="btn" id="splus">Larger</button></div>
+    <button class="btn primary" id="calDone">Done</button>
+  </div>
+</div>
+
+<div class="full" id="perform">
+  <div id="pbg"></div>
+  <img class="cardimg" id="pc" alt="">
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const TYPES={
+ poker:{n:'Poker card (63.5 × 88.9 mm)',w:63.5,h:88.9,sh:'round'},
+ bridge:{n:'Bridge card (57.2 × 88.9 mm)',w:57.15,h:88.9,sh:'round'},
+ biz:{n:'Business card, US (50.8 × 88.9 mm, held upright)',w:50.8,h:88.9,sh:'sharp'},
+ bizeu:{n:'Business card, UK/EU (55 × 85 mm, held upright)',w:55,h:85,sh:'sharp'},
+ quarter:{n:'US quarter (24.3 mm)',w:24.26,h:24.26,sh:'circle'},
+ tenp:{n:'UK 10p coin (24.5 mm)',w:24.5,h:24.5,sh:'circle'},
+ twopound:{n:'UK £2 coin (28.4 mm)',w:28.4,h:28.4,sh:'circle'},
+ euro2:{n:'€2 coin (25.75 mm)',w:25.75,h:25.75,sh:'circle'},
+ custom:{n:'Custom size…',w:50,h:50,sh:'round'}
+};
+function dims(){return S.type==='custom'?{w:S.cw,h:S.ch}:TYPES[S.type]}
+const PPM0=153.33/25.4; /* CSS pixels per mm on 460 ppi, 3x iPhones */
+let S={type:'poker',shape:'round',cw:50,ch:50,lock:false,fin:true,dur:260,low:40,quit:false,qdelay:300,scale:1,ox:0,oy:0};
+try{Object.assign(S,JSON.parse(localStorage.getItem('cr_s')||'{}'))}catch(e){}
+const saveS=()=>{try{localStorage.setItem('cr_s',JSON.stringify(S))}catch(e){}};
+const IMG={card:null,bg:null};
+
+let _db;
+const idb=()=>_db||(_db=new Promise((res,rej)=>{const r=indexedDB.open('cardreveal2',1);r.onupgradeneeded=()=>r.result.createObjectStore('k');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}));
+async function dbGet(k){try{const d=await idb();return await new Promise(res=>{const q=d.transaction('k').objectStore('k').get(k);q.onsuccess=()=>res(q.result||null);q.onerror=()=>res(null)})}catch(e){return null}}
+async function dbSet(k,v){try{const d=await idb();const s=d.transaction('k','readwrite').objectStore('k');v?s.put(v,k):s.delete(k)}catch(e){}}
+
+const readFile=f=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(f)});
+const loadImg=src=>new Promise((res,rej)=>{const i=new Image();i.onload=()=>res(i);i.onerror=rej;i.src=src});
+async function fileToCanvas(file,max){
+  const img=await loadImg(await readFile(file));
+  const s=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+  const c=document.createElement('canvas');
+  c.width=Math.round(img.naturalWidth*s);c.height=Math.round(img.naturalHeight*s);
+  c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return c;
+}
+
+/* ---- setup UI ---- */
+$('#type').innerHTML=Object.entries(TYPES).map(([k,t])=>`<option value="${k}">${t.n}</option>`).join('');
+$('#type').value=S.type;
+$('#type').onchange=e=>{S.type=e.target.value;if(S.type!=='custom')S.shape=TYPES[S.type].sh;$('#shape').value=S.shape;saveS();refresh()};
+$('#shape').value=S.shape;$('#shape').onchange=e=>{S.shape=e.target.value;saveS()};
+$('#cw').value=S.cw;$('#ch').value=S.ch;
+$('#cw').oninput=e=>{S.cw=Math.max(5,+e.target.value||5);saveS()};
+$('#ch').oninput=e=>{S.ch=Math.max(5,+e.target.value||5);saveS()};
+$('#lock').checked=S.lock;$('#lock').onchange=e=>{S.lock=e.target.checked;saveS()};
+$('#fin').checked=S.fin;$('#fin').onchange=e=>{S.fin=e.target.checked;saveS()};
+$('#low').value=S.low;$('#lowv').textContent=S.low+' px';$('#low').oninput=e=>{S.low=+e.target.value;$('#lowv').textContent=S.low+' px';saveS()};
+$('#quit').checked=S.quit;$('#quit').onchange=e=>{S.quit=e.target.checked;saveS()};
+$('#qd').value=S.qdelay;$('#qdv').textContent=S.qdelay+' ms';$('#qd').oninput=e=>{S.qdelay=+e.target.value;$('#qdv').textContent=S.qdelay+' ms';saveS()};
+$('#dur').value=S.dur;$('#durv').textContent=S.dur+' ms';$('#dur').oninput=e=>{S.dur=+e.target.value;$('#durv').textContent=S.dur+' ms';saveS()};
+function refresh(){
+  for(const k of ['card','bg'])$('#t-'+k).innerHTML=IMG[k]?`<img src="${IMG[k]}" alt="">`:'None';
+  $('#go').disabled=!IMG.card;
+  $('#customrow').style.display=S.type==='custom'?'contents':'none';
+  $('#scaleinfo').textContent=`Current size setting: ${(S.scale*100).toFixed(1)}% of the default.`;
+}
+for(const k of ['card','bg'])$('#clr-'+k).onclick=()=>{IMG[k]=null;dbSet(k,null);refresh()};
+document.querySelectorAll('input[data-k]').forEach(inp=>inp.onchange=async()=>{
+  const f=inp.files[0];if(!f)return;const k=inp.dataset.k;
+  try{
+    if(k==='card')openCrop(await fileToCanvas(f,2600));
+    else{const c=await fileToCanvas(f,3200);IMG.bg=c.toDataURL('image/jpeg',.92);dbSet('bg',IMG.bg);refresh()}
+  }catch(e){alert('Couldn’t read that image.')}
+  inp.value='';
+});
+
+/* ---- perspective crop ---- */
+const cc=$('#cc'),cx=cc.getContext('2d');let csrc,q=[],dragI=-1;
+function openCrop(c){
+  csrc=c;cc.width=c.width;cc.height=c.height;const m=.18;
+  q=[[m,m],[1-m,m],[1-m,1-m],[m,1-m]].map(p=>[p[0]*c.width,p[1]*c.height]);
+  drawCrop();$('#crop').classList.add('show');
+}
+function drawCrop(){
+  cx.drawImage(csrc,0,0);const r=cc.width/38;
+  cx.lineWidth=r/5;cx.strokeStyle='#fff';cx.beginPath();
+  q.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1]));cx.closePath();cx.stroke();
+  cx.save();cx.lineWidth=r/2.2;cx.strokeStyle='#ffb020';cx.beginPath();cx.moveTo(q[0][0],q[0][1]);cx.lineTo(q[1][0],q[1][1]);cx.stroke();cx.restore();
+  cx.fillStyle='rgba(91,91,214,.9)';
+  q.forEach(p=>{cx.beginPath();cx.arc(p[0],p[1],r,0,7);cx.fill();cx.stroke()});
+}
+const cpos=e=>{const r=cc.getBoundingClientRect();return[(e.clientX-r.left)*cc.width/r.width,(e.clientY-r.top)*cc.height/r.height]};
+cc.addEventListener('pointerdown',e=>{
+  const p=cpos(e);let best=-1,bd=(cc.width/38*3)**2;
+  q.forEach((v,i)=>{const d=(v[0]-p[0])**2+(v[1]-p[1])**2;if(d<bd){bd=d;best=i}});
+  dragI=best;if(best>=0)cc.setPointerCapture(e.pointerId);
+});
+cc.addEventListener('pointermove',e=>{
+  if(dragI<0)return;const p=cpos(e);
+  q[dragI]=[Math.max(0,Math.min(cc.width,p[0])),Math.max(0,Math.min(cc.height,p[1]))];drawCrop();
+});
+const cup=()=>{dragI=-1};cc.addEventListener('pointerup',cup);cc.addEventListener('pointercancel',cup);
+$('#cCancel').onclick=()=>$('#crop').classList.remove('show');
+$('#cRot').onclick=()=>{q.push(q.shift());drawCrop()};
+$('#cDone').onclick=()=>{
+  const t=dims(),W=Math.round(t.w*20),H=Math.round(t.h*20);
+  IMG.card=warp(csrc,q,W,H).toDataURL('image/png');dbSet('card',IMG.card);
+  $('#crop').classList.remove('show');refresh();
+};
+function warp(src,pts,W,H){
+  const sw=src.width,sh=src.height,sd=src.getContext('2d').getImageData(0,0,sw,sh).data;
+  const[p0,p1,p2,p3]=pts;
+  const dx1=p1[0]-p2[0],dx2=p3[0]-p2[0],dx3=p0[0]-p1[0]+p2[0]-p3[0];
+  const dy1=p1[1]-p2[1],dy2=p3[1]-p2[1],dy3=p0[1]-p1[1]+p2[1]-p3[1];
+  const den=dx1*dy2-dy1*dx2;
+  const g=den?(dx3*dy2-dy3*dx2)/den:0,h=den?(dx1*dy3-dy1*dx3)/den:0;
+  const a=p1[0]-p0[0]+g*p1[0],b=p3[0]-p0[0]+h*p3[0],c=p0[0];
+  const d=p1[1]-p0[1]+g*p1[1],e=p3[1]-p0[1]+h*p3[1],f=p0[1];
+  const out=document.createElement('canvas');out.width=W;out.height=H;
+  const oc=out.getContext('2d'),od=oc.createImageData(W,H),o=od.data;
+  for(let j=0;j<H;j++)for(let i=0;i<W;i++){
+    const u=(i+.5)/W,v=(j+.5)/H,k=g*u+h*v+1;
+    const x=(a*u+b*v+c)/k-.5,y=(d*u+e*v+f)/k-.5;
+    const x0=Math.max(0,Math.min(sw-2,Math.floor(x))),y0=Math.max(0,Math.min(sh-2,Math.floor(y)));
+    const fx=Math.max(0,Math.min(1,x-x0)),fy=Math.max(0,Math.min(1,y-y0));
+    const i00=(y0*sw+x0)*4,i10=i00+4,i01=i00+sw*4,i11=i01+4,oi=(j*W+i)*4;
+    for(let ch=0;ch<3;ch++)o[oi+ch]=(sd[i00+ch]*(1-fx)+sd[i10+ch]*fx)*(1-fy)+(sd[i01+ch]*(1-fx)+sd[i11+ch]*fx)*fy;
+    o[oi+3]=255;
+  }
+  oc.putImageData(od,0,0);
+  const fin=document.createElement('canvas');fin.width=W;fin.height=H;
+  const fc=fin.getContext('2d'),r=S.shape==='sharp'?0:Math.min(70,W/2,H/2);
+  fc.beginPath();if(S.shape==='circle')fc.ellipse(W/2,H/2,W/2,H/2,0,0,7);else{fc.moveTo(r,0);fc.arcTo(W,0,W,H,r);fc.arcTo(W,H,0,H,r);fc.arcTo(0,H,0,0,r);fc.arcTo(0,0,W,0,r);fc.closePath()}fc.clip();
+  fc.drawImage(out,0,0);return fin;
+}
+
+/* ---- sizing ---- */
+function place(el,host,dx,dy){
+  const t=dims(),ppm=PPM0*S.scale,w=t.w*ppm,h=t.h*ppm;
+  el.style.width=w+'px';el.style.height=h+'px';
+  el.style.transform=`translate(${(host.clientWidth-w)/2+S.ox+dx}px,${(host.clientHeight-h)/2+S.oy+S.low+dy}px)`;
+}
+
+/* ---- calibrate ---- */
+const CAL=$('#cal'),calcard=$('#calcard');
+let cdrag=null;
+function calUpdate(){
+  place(calcard,CAL,0,0);
+  $('#calread').textContent=`Size ${(S.scale*100).toFixed(1)}% · card width ${(dims().w*PPM0*S.scale).toFixed(0)} px`;
+}
+$('#calbtn').onclick=()=>{calcard.src=IMG.card||'';calcard.style.background=IMG.card?'':'#fff';CAL.classList.add('show');calUpdate()};
+$('#smin').onclick=()=>{S.scale=Math.max(.7,S.scale-.005);calUpdate()};
+$('#splus').onclick=()=>{S.scale=Math.min(1.4,S.scale+.005);calUpdate()};
+$('#calDone').onclick=()=>{saveS();CAL.classList.remove('show');refresh()};
+CAL.addEventListener('pointerdown',e=>{if(e.target.closest('#calui'))return;cdrag={x:e.clientX,y:e.clientY,ox:S.ox,oy:S.oy};CAL.setPointerCapture(e.pointerId)});
+CAL.addEventListener('pointermove',e=>{if(!cdrag)return;S.ox=cdrag.ox+e.clientX-cdrag.x;S.oy=cdrag.oy+e.clientY-cdrag.y;calUpdate()});
+const cend=()=>{cdrag=null};CAL.addEventListener('pointerup',cend);CAL.addEventListener('pointercancel',cend);
+
+/* ---- perform ---- */
+const P=$('#perform'),pc=$('#pc'),ptr=new Map();
+let dx=0,dy=0,start=null,axis=null,two=false,timer=null,smp=[];
+const show=()=>place(pc,P,dx,dy);
+$('#go').onclick=()=>{
+  if(!IMG.card)return;
+  $('#pbg').style.backgroundImage=IMG.bg?`url(${IMG.bg})`:'none';
+  pc.src=IMG.card;pc.style.transition='none';dx=0;dy=0;ptr.clear();two=false;P.classList.add('show');show();
+};
+P.addEventListener('pointerdown',e=>{
+  P.setPointerCapture(e.pointerId);ptr.set(e.pointerId,1);
+  if(ptr.size===1&&!two){pc.style.transition='none';smp=[];start={x:e.clientX,y:e.clientY,dx,dy};axis=null}
+  else if(ptr.size>=2&&!two){two=true;start=null;timer=setTimeout(()=>{timer=null;P.classList.remove('show')},900)}
+});
+P.addEventListener('pointermove',e=>{
+  if(!start||two||!ptr.has(e.pointerId))return;
+  let mx=e.clientX-start.x,my=e.clientY-start.y;
+  if(S.lock){
+    if(!axis&&Math.max(Math.abs(mx),Math.abs(my))>10)axis=Math.abs(mx)>Math.abs(my)?'x':'y';
+    if(axis==='x')my=0;else if(axis==='y')mx=0;else{mx=0;my=0}
+  }
+  dx=start.dx+mx;dy=start.dy+my;show();
+  const n=performance.now();smp.push([n,e.clientX,e.clientY]);while(smp.length&&n-smp[0][0]>250)smp.shift();
+});
+function finish(e){
+  if(!S.fin)return;
+  const t=dims(),ppm=PPM0*S.scale,w=t.w*ppm,h=t.h*ppm,W=P.clientWidth,H=P.clientHeight;
+  const L=Math.hypot(dx,dy);if(L<5)return;
+  const frac=Math.max(Math.abs(dx)/w,Math.abs(dy)/h);
+  const edge=e.clientX<50||e.clientX>W-50||e.clientY<50||e.clientY>H-50;
+  if(!(frac>=.28||(edge&&frac>=.08)))return;
+  let ux=dx/L,uy=dy/L;
+  if(smp.length>1){const a=smp[0],b=smp[smp.length-1],vx=b[1]-a[1],vy=b[2]-a[2],m=Math.hypot(vx,vy);if(m>8){ux=vx/m;uy=vy/m}}
+  const ang=Math.atan2(Math.abs(uy),Math.abs(ux))*57.3;
+  if(ang<30){ux=Math.sign(ux)||1;uy=0}else if(ang>60){uy=Math.sign(uy)||1;ux=0}
+  if(S.lock&&axis==='x'){ux=Math.sign(ux||dx)||1;uy=0}else if(S.lock&&axis==='y'){uy=Math.sign(uy||dy)||1;ux=0}
+  let s=0;
+  for(;s<4000;s+=10){const px=(W-w)/2+S.ox+dx+ux*s,py=(H-h)/2+S.oy+S.low+dy+uy*s;if(px>=W||px+w<=0||py>=H||py+h<=0)break}
+  pc.style.transition=`transform ${S.dur}ms cubic-bezier(.2,.7,.3,1)`;
+  dx+=ux*(s+10);dy+=uy*(s+10);show();
+  if(S.quit)setTimeout(()=>{try{window.webkit.messageHandlers.quit.postMessage(1)}catch(e){}},S.dur+S.qdelay);
+}
+const pup=e=>{
+  if(!ptr.delete(e.pointerId))return;
+  if(two){
+    if(timer){clearTimeout(timer);timer=null;pc.style.transition='none';dx=0;dy=0;show()}
+    if(ptr.size===0){two=false}
+  }else{if(start)finish(e);start=null}
+};
+P.addEventListener('pointerup',pup);P.addEventListener('pointercancel',pup);
+P.addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('resize',()=>{if(P.classList.contains('show'))show()});
+
+(async()=>{for(const k of ['card','bg'])IMG[k]=await dbGet(k);refresh()})();
+</script>
+</body>
+</html>
