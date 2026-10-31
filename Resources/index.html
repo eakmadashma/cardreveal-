@@ -28,7 +28,7 @@ p.sub{color:var(--muted);margin:0 0 18px}
 .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent}
 .btn.big{width:100%;padding:15px;font-size:17px;margin-top:6px}
 .btn[disabled]{opacity:.4}
-select{font:inherit;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+select,input[type=number]{font:inherit;padding:9px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
 input[type=file]{display:none}
 .chk{display:flex;gap:8px;align-items:center;margin-top:10px}
 .tip{color:var(--muted);font-size:13px;margin-top:14px}
@@ -59,9 +59,11 @@ input[type=file]{display:none}
   <p class="sub">A real-size photo of your card on screen, sitting over the real card behind your phone.</p>
 
   <div class="slot">
-    <h2>1. Your card</h2><small>Photograph the real card flat and well lit, then mark its four corners.</small>
+    <h2>1. Your object</h2><small>Choose the size and shape first, then photograph it flat and well lit and mark its four corners.</small>
     <div class="row">
-      <label>Card size <select id="type"></select></label>
+      <label>Size <select id="type"></select></label>
+      <label>Shape <select id="shape"><option value="sharp">Square corners</option><option value="round">Rounded corners</option><option value="circle">Circle / oval</option></select></label>
+      <span id="customrow" style="display:none"><label>Width <input type="number" id="cw" min="5" max="120" step="0.1" style="width:84px"> mm</label> <label>Height <input type="number" id="ch" min="5" max="120" step="0.1" style="width:84px"> mm</label></span>
     </div>
     <div class="row">
       <div class="thumb" id="t-card">None</div>
@@ -98,9 +100,9 @@ input[type=file]{display:none}
 </main>
 
 <div class="full" id="crop">
-  <p>Drag the four dots onto the corners of the card.</p>
+  <p>Drag the four dots onto the corners of the object. For a coin, use the corners of an imaginary square that just touches it. The orange edge becomes the top, so tap Rotate to turn it.</p>
   <div id="cw"><canvas id="cc"></canvas></div>
-  <div class="tools"><button class="btn" id="cCancel">Cancel</button><button class="btn primary" id="cDone">Done</button></div>
+  <div class="tools"><button class="btn" id="cCancel">Cancel</button><button class="btn" id="cRot">Rotate</button><button class="btn primary" id="cDone">Done</button></div>
 </div>
 
 <div class="full" id="cal">
@@ -120,9 +122,20 @@ input[type=file]{display:none}
 
 <script>
 const $=s=>document.querySelector(s);
-const TYPES={poker:{n:'Poker (63.5 × 88.9 mm)',w:63.5,h:88.9},bridge:{n:'Bridge (57.2 × 88.9 mm)',w:57.15,h:88.9}};
+const TYPES={
+ poker:{n:'Poker card (63.5 × 88.9 mm)',w:63.5,h:88.9,sh:'round'},
+ bridge:{n:'Bridge card (57.2 × 88.9 mm)',w:57.15,h:88.9,sh:'round'},
+ biz:{n:'Business card, US (50.8 × 88.9 mm, held upright)',w:50.8,h:88.9,sh:'sharp'},
+ bizeu:{n:'Business card, UK/EU (55 × 85 mm, held upright)',w:55,h:85,sh:'sharp'},
+ quarter:{n:'US quarter (24.3 mm)',w:24.26,h:24.26,sh:'circle'},
+ tenp:{n:'UK 10p coin (24.5 mm)',w:24.5,h:24.5,sh:'circle'},
+ twopound:{n:'UK £2 coin (28.4 mm)',w:28.4,h:28.4,sh:'circle'},
+ euro2:{n:'€2 coin (25.75 mm)',w:25.75,h:25.75,sh:'circle'},
+ custom:{n:'Custom size…',w:50,h:50,sh:'round'}
+};
+function dims(){return S.type==='custom'?{w:S.cw,h:S.ch}:TYPES[S.type]}
 const PPM0=153.33/25.4; /* CSS pixels per mm on 460 ppi, 3x iPhones */
-let S={type:'poker',lock:false,fin:true,dur:260,low:40,quit:false,qdelay:300,scale:1,ox:0,oy:0};
+let S={type:'poker',shape:'round',cw:50,ch:50,lock:false,fin:true,dur:260,low:40,quit:false,qdelay:300,scale:1,ox:0,oy:0};
 try{Object.assign(S,JSON.parse(localStorage.getItem('cr_s')||'{}'))}catch(e){}
 const saveS=()=>{try{localStorage.setItem('cr_s',JSON.stringify(S))}catch(e){}};
 const IMG={card:null,bg:null};
@@ -146,7 +159,11 @@ async function fileToCanvas(file,max){
 /* ---- setup UI ---- */
 $('#type').innerHTML=Object.entries(TYPES).map(([k,t])=>`<option value="${k}">${t.n}</option>`).join('');
 $('#type').value=S.type;
-$('#type').onchange=e=>{S.type=e.target.value;saveS();refresh()};
+$('#type').onchange=e=>{S.type=e.target.value;if(S.type!=='custom')S.shape=TYPES[S.type].sh;$('#shape').value=S.shape;saveS();refresh()};
+$('#shape').value=S.shape;$('#shape').onchange=e=>{S.shape=e.target.value;saveS()};
+$('#cw').value=S.cw;$('#ch').value=S.ch;
+$('#cw').oninput=e=>{S.cw=Math.max(5,+e.target.value||5);saveS()};
+$('#ch').oninput=e=>{S.ch=Math.max(5,+e.target.value||5);saveS()};
 $('#lock').checked=S.lock;$('#lock').onchange=e=>{S.lock=e.target.checked;saveS()};
 $('#fin').checked=S.fin;$('#fin').onchange=e=>{S.fin=e.target.checked;saveS()};
 $('#low').value=S.low;$('#lowv').textContent=S.low+' px';$('#low').oninput=e=>{S.low=+e.target.value;$('#lowv').textContent=S.low+' px';saveS()};
@@ -156,6 +173,7 @@ $('#dur').value=S.dur;$('#durv').textContent=S.dur+' ms';$('#dur').oninput=e=>{S
 function refresh(){
   for(const k of ['card','bg'])$('#t-'+k).innerHTML=IMG[k]?`<img src="${IMG[k]}" alt="">`:'None';
   $('#go').disabled=!IMG.card;
+  $('#customrow').style.display=S.type==='custom'?'contents':'none';
   $('#scaleinfo').textContent=`Current size setting: ${(S.scale*100).toFixed(1)}% of the default.`;
 }
 for(const k of ['card','bg'])$('#clr-'+k).onclick=()=>{IMG[k]=null;dbSet(k,null);refresh()};
@@ -179,6 +197,7 @@ function drawCrop(){
   cx.drawImage(csrc,0,0);const r=cc.width/38;
   cx.lineWidth=r/5;cx.strokeStyle='#fff';cx.beginPath();
   q.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1]));cx.closePath();cx.stroke();
+  cx.save();cx.lineWidth=r/2.2;cx.strokeStyle='#ffb020';cx.beginPath();cx.moveTo(q[0][0],q[0][1]);cx.lineTo(q[1][0],q[1][1]);cx.stroke();cx.restore();
   cx.fillStyle='rgba(91,91,214,.9)';
   q.forEach(p=>{cx.beginPath();cx.arc(p[0],p[1],r,0,7);cx.fill();cx.stroke()});
 }
@@ -194,8 +213,9 @@ cc.addEventListener('pointermove',e=>{
 });
 const cup=()=>{dragI=-1};cc.addEventListener('pointerup',cup);cc.addEventListener('pointercancel',cup);
 $('#cCancel').onclick=()=>$('#crop').classList.remove('show');
+$('#cRot').onclick=()=>{q.push(q.shift());drawCrop()};
 $('#cDone').onclick=()=>{
-  const t=TYPES[S.type],W=1200,H=Math.round(W*t.h/t.w);
+  const t=dims(),W=Math.round(t.w*20),H=Math.round(t.h*20);
   IMG.card=warp(csrc,q,W,H).toDataURL('image/png');dbSet('card',IMG.card);
   $('#crop').classList.remove('show');refresh();
 };
@@ -221,14 +241,14 @@ function warp(src,pts,W,H){
   }
   oc.putImageData(od,0,0);
   const fin=document.createElement('canvas');fin.width=W;fin.height=H;
-  const fc=fin.getContext('2d'),r=W*.055;
-  fc.beginPath();fc.moveTo(r,0);fc.arcTo(W,0,W,H,r);fc.arcTo(W,H,0,H,r);fc.arcTo(0,H,0,0,r);fc.arcTo(0,0,W,0,r);fc.closePath();fc.clip();
+  const fc=fin.getContext('2d'),r=S.shape==='sharp'?0:Math.min(70,W/2,H/2);
+  fc.beginPath();if(S.shape==='circle')fc.ellipse(W/2,H/2,W/2,H/2,0,0,7);else{fc.moveTo(r,0);fc.arcTo(W,0,W,H,r);fc.arcTo(W,H,0,H,r);fc.arcTo(0,H,0,0,r);fc.arcTo(0,0,W,0,r);fc.closePath()}fc.clip();
   fc.drawImage(out,0,0);return fin;
 }
 
 /* ---- sizing ---- */
 function place(el,host,dx,dy){
-  const t=TYPES[S.type],ppm=PPM0*S.scale,w=t.w*ppm,h=t.h*ppm;
+  const t=dims(),ppm=PPM0*S.scale,w=t.w*ppm,h=t.h*ppm;
   el.style.width=w+'px';el.style.height=h+'px';
   el.style.transform=`translate(${(host.clientWidth-w)/2+S.ox+dx}px,${(host.clientHeight-h)/2+S.oy+S.low+dy}px)`;
 }
@@ -238,7 +258,7 @@ const CAL=$('#cal'),calcard=$('#calcard');
 let cdrag=null;
 function calUpdate(){
   place(calcard,CAL,0,0);
-  $('#calread').textContent=`Size ${(S.scale*100).toFixed(1)}% · card width ${(TYPES[S.type].w*PPM0*S.scale).toFixed(0)} px`;
+  $('#calread').textContent=`Size ${(S.scale*100).toFixed(1)}% · card width ${(dims().w*PPM0*S.scale).toFixed(0)} px`;
 }
 $('#calbtn').onclick=()=>{calcard.src=IMG.card||'';calcard.style.background=IMG.card?'':'#fff';CAL.classList.add('show');calUpdate()};
 $('#smin').onclick=()=>{S.scale=Math.max(.7,S.scale-.005);calUpdate()};
@@ -274,7 +294,7 @@ P.addEventListener('pointermove',e=>{
 });
 function finish(e){
   if(!S.fin)return;
-  const t=TYPES[S.type],ppm=PPM0*S.scale,w=t.w*ppm,h=t.h*ppm,W=P.clientWidth,H=P.clientHeight;
+  const t=dims(),ppm=PPM0*S.scale,w=t.w*ppm,h=t.h*ppm,W=P.clientWidth,H=P.clientHeight;
   const L=Math.hypot(dx,dy);if(L<5)return;
   const frac=Math.max(Math.abs(dx)/w,Math.abs(dy)/h);
   const edge=e.clientX<50||e.clientX>W-50||e.clientY<50||e.clientY>H-50;
