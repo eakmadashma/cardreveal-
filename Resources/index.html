@@ -158,8 +158,8 @@ for(const k of ['card','bg'])$('#clr-'+k).onclick=()=>{IMG[k]=null;dbSet(k,null)
 document.querySelectorAll('input[data-k]').forEach(inp=>inp.onchange=async()=>{
   const f=inp.files[0];if(!f)return;const k=inp.dataset.k;
   try{
-    if(k==='card')openCrop(await fileToCanvas(f,2000));
-    else{const c=await fileToCanvas(f,1400);IMG.bg=c.toDataURL('image/jpeg',.8);dbSet('bg',IMG.bg);refresh()}
+    if(k==='card')openCrop(await fileToCanvas(f,2600));
+    else{const c=await fileToCanvas(f,3200);IMG.bg=c.toDataURL('image/jpeg',.92);dbSet('bg',IMG.bg);refresh()}
   }catch(e){alert('Couldn’t read that image.')}
   inp.value='';
 });
@@ -191,7 +191,7 @@ cc.addEventListener('pointermove',e=>{
 const cup=()=>{dragI=-1};cc.addEventListener('pointerup',cup);cc.addEventListener('pointercancel',cup);
 $('#cCancel').onclick=()=>$('#crop').classList.remove('show');
 $('#cDone').onclick=()=>{
-  const t=TYPES[S.type],W=700,H=Math.round(W*t.h/t.w);
+  const t=TYPES[S.type],W=1200,H=Math.round(W*t.h/t.w);
   IMG.card=warp(csrc,q,W,H).toDataURL('image/png');dbSet('card',IMG.card);
   $('#crop').classList.remove('show');refresh();
 };
