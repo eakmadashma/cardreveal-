@@ -88,11 +88,13 @@ input[type=file]{display:none}
     <div class="chk"><input type="checkbox" id="fin"><label for="fin">Finish the pull-out automatically when I let go</label></div>
     <div class="chk"><label for="dur">Slide-off time</label><input type="range" id="dur" min="120" max="700" step="10" style="flex:1"><span id="durv"></span></div>
     <div class="chk"><label for="low">Start lower by</label><input type="range" id="low" min="0" max="200" step="2" style="flex:1"><span id="lowv"></span></div>
+    <div class="chk"><input type="checkbox" id="quit"><label for="quit">Close the app after the card is pulled out (needs auto-finish on; installed app only)</label></div>
+    <div class="chk"><label for="qd">Close delay</label><input type="range" id="qd" min="0" max="3000" step="50" style="flex:1"><span id="qdv"></span></div>
     <div class="tip" id="scaleinfo"></div>
   </div>
 
   <button class="btn primary big" id="go" disabled>Perform</button>
-  <p class="tip">While performing: drag with one finger. Tap with two fingers to put the card back in place, or hold two fingers for a second to exit.</p>
+  <p class="tip">While performing: drag with one finger. Tap with two fingers to put the card back in place, or hold two fingers for a second to exit. Calibrate and perform from the Home Screen icon (Share, then Add to Home Screen) so Safari’s bars don’t shift the position.</p>
 </main>
 
 <div class="full" id="crop">
@@ -120,7 +122,7 @@ input[type=file]{display:none}
 const $=s=>document.querySelector(s);
 const TYPES={poker:{n:'Poker (63.5 × 88.9 mm)',w:63.5,h:88.9},bridge:{n:'Bridge (57.2 × 88.9 mm)',w:57.15,h:88.9}};
 const PPM0=153.33/25.4; /* CSS pixels per mm on 460 ppi, 3x iPhones */
-let S={type:'poker',lock:false,fin:true,dur:260,low:40,scale:1,ox:0,oy:0};
+let S={type:'poker',lock:false,fin:true,dur:260,low:40,quit:false,qdelay:300,scale:1,ox:0,oy:0};
 try{Object.assign(S,JSON.parse(localStorage.getItem('cr_s')||'{}'))}catch(e){}
 const saveS=()=>{try{localStorage.setItem('cr_s',JSON.stringify(S))}catch(e){}};
 const IMG={card:null,bg:null};
@@ -148,6 +150,8 @@ $('#type').onchange=e=>{S.type=e.target.value;saveS();refresh()};
 $('#lock').checked=S.lock;$('#lock').onchange=e=>{S.lock=e.target.checked;saveS()};
 $('#fin').checked=S.fin;$('#fin').onchange=e=>{S.fin=e.target.checked;saveS()};
 $('#low').value=S.low;$('#lowv').textContent=S.low+' px';$('#low').oninput=e=>{S.low=+e.target.value;$('#lowv').textContent=S.low+' px';saveS()};
+$('#quit').checked=S.quit;$('#quit').onchange=e=>{S.quit=e.target.checked;saveS()};
+$('#qd').value=S.qdelay;$('#qdv').textContent=S.qdelay+' ms';$('#qd').oninput=e=>{S.qdelay=+e.target.value;$('#qdv').textContent=S.qdelay+' ms';saveS()};
 $('#dur').value=S.dur;$('#durv').textContent=S.dur+' ms';$('#dur').oninput=e=>{S.dur=+e.target.value;$('#durv').textContent=S.dur+' ms';saveS()};
 function refresh(){
   for(const k of ['card','bg'])$('#t-'+k).innerHTML=IMG[k]?`<img src="${IMG[k]}" alt="">`:'None';
@@ -284,6 +288,7 @@ function finish(e){
   for(;s<4000;s+=10){const px=(W-w)/2+S.ox+dx+ux*s,py=(H-h)/2+S.oy+S.low+dy+uy*s;if(px>=W||px+w<=0||py>=H||py+h<=0)break}
   pc.style.transition=`transform ${S.dur}ms cubic-bezier(.2,.7,.3,1)`;
   dx+=ux*(s+10);dy+=uy*(s+10);show();
+  if(S.quit)setTimeout(()=>{try{window.webkit.messageHandlers.quit.postMessage(1)}catch(e){}},S.dur+S.qdelay);
 }
 const pup=e=>{
   if(!ptr.delete(e.pointerId))return;
