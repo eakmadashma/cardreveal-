@@ -35,10 +35,22 @@ final class LocalHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
 }
 
+/// The page calls this when the card has been pulled out and "close the app" is on.
+/// It sends the app back to the Home Screen, then quits the process so it is fully closed.
+final class QuitHandler: NSObject, WKScriptMessageHandler {
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        UIControl().sendAction(#selector(URLSessionTask.suspend),
+                               to: UIApplication.shared, for: nil)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { exit(0) }
+    }
+}
+
 struct WebContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(LocalHandler(), forURLScheme: "app")
+        config.userContentController.add(QuitHandler(), name: "quit")
         let web = WKWebView(frame: .zero, configuration: config)
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.scrollView.bounces = false
