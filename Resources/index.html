@@ -92,6 +92,10 @@ input[type=file]{display:none}
     <div class="chk"><label for="low">Start lower by</label><input type="range" id="low" min="0" max="200" step="2" style="flex:1"><span id="lowv"></span></div>
     <div class="chk"><input type="checkbox" id="quit"><label for="quit">Close the app after the card is pulled out (needs auto-finish on; installed app only)</label></div>
     <div class="chk"><label for="qd">Close delay</label><input type="range" id="qd" min="0" max="3000" step="50" style="flex:1"><span id="qdv"></span></div>
+    <div class="chk"><input type="checkbox" id="tap"><label for="tap">Card appears when I tap the phone against something (installed app only)</label></div>
+    <div class="chk"><label for="th">Tap strength needed</label><input type="range" id="th" min="0.4" max="4" step="0.1" style="flex:1"><span id="thv"></span></div>
+    <div class="chk"><label for="ap">Appear time</label><input type="range" id="ap" min="0" max="600" step="10" style="flex:1"><span id="apv"></span></div>
+    <div class="row"><button class="btn" id="tbtn">Test the tap sensor</button><span class="tip" id="tout" style="margin:0"></span></div>
     <div class="tip" id="scaleinfo"></div>
   </div>
 
@@ -135,7 +139,7 @@ const TYPES={
 };
 function dims(){return S.type==='custom'?{w:S.cw,h:S.ch}:TYPES[S.type]}
 const PPM0=153.33/25.4; /* CSS pixels per mm on 460 ppi, 3x iPhones */
-let S={type:'poker',shape:'round',cw:50,ch:50,lock:false,fin:true,dur:260,low:40,quit:false,qdelay:300,scale:1,ox:0,oy:0};
+let S={type:'poker',shape:'round',cw:50,ch:50,lock:false,fin:true,dur:260,low:40,quit:false,qdelay:300,tap:false,th:1,appear:120,scale:1,ox:0,oy:0};
 try{Object.assign(S,JSON.parse(localStorage.getItem('cr_s')||'{}'))}catch(e){}
 const saveS=()=>{try{localStorage.setItem('cr_s',JSON.stringify(S))}catch(e){}};
 const IMG={card:null,bg:null};
@@ -169,6 +173,20 @@ $('#fin').checked=S.fin;$('#fin').onchange=e=>{S.fin=e.target.checked;saveS()};
 $('#low').value=S.low;$('#lowv').textContent=S.low+' px';$('#low').oninput=e=>{S.low=+e.target.value;$('#lowv').textContent=S.low+' px';saveS()};
 $('#quit').checked=S.quit;$('#quit').onchange=e=>{S.quit=e.target.checked;saveS()};
 $('#qd').value=S.qdelay;$('#qdv').textContent=S.qdelay+' ms';$('#qd').oninput=e=>{S.qdelay=+e.target.value;$('#qdv').textContent=S.qdelay+' ms';saveS()};
+$('#tap').checked=S.tap;$('#tap').onchange=e=>{S.tap=e.target.checked;saveS()};
+$('#th').value=S.th;$('#thv').textContent=S.th.toFixed(1)+' g';$('#th').oninput=e=>{S.th=+e.target.value;$('#thv').textContent=S.th.toFixed(1)+' g';saveS()};
+$('#ap').value=S.appear;$('#apv').textContent=S.appear+' ms';$('#ap').oninput=e=>{S.appear=+e.target.value;$('#apv').textContent=S.appear+' ms';saveS()};
+let testing=false;
+const nat=m=>{try{window.webkit.messageHandlers.bump.postMessage(m)}catch(e){}};
+$('#tbtn').onclick=()=>{
+  if(!(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.bump)){$('#tout').textContent='Only works in the installed app.';return}
+  testing=!testing;$('#tbtn').textContent=testing?'Stop testing':'Test the tap sensor';
+  $('#tout').textContent=testing?'Tap or bump the phone now…':'';nat({on:testing,th:.3});
+};
+window.onBump=mag=>{
+  if(testing){$('#tout').textContent='Detected '+mag.toFixed(1)+' g (needs '+S.th.toFixed(1)+' g)';return}
+  if(P.classList.contains('show')&&S.tap&&hidden)reveal();
+};
 $('#dur').value=S.dur;$('#durv').textContent=S.dur+' ms';$('#dur').oninput=e=>{S.dur=+e.target.value;$('#durv').textContent=S.dur+' ms';saveS()};
 function refresh(){
   for(const k of ['card','bg'])$('#t-'+k).innerHTML=IMG[k]?`<img src="${IMG[k]}" alt="">`:'None';
@@ -270,17 +288,24 @@ const cend=()=>{cdrag=null};CAL.addEventListener('pointerup',cend);CAL.addEventL
 
 /* ---- perform ---- */
 const P=$('#perform'),pc=$('#pc'),ptr=new Map();
-let dx=0,dy=0,start=null,axis=null,two=false,timer=null,smp=[];
+let dx=0,dy=0,start=null,axis=null,two=false,timer=null,smp=[],hidden=false,armT=null;
 const show=()=>place(pc,P,dx,dy);
+function armBump(){clearTimeout(armT);armT=setTimeout(()=>nat({on:true,th:S.th}),800)}
+function hide(){hidden=true;pc.style.transition='none';pc.style.opacity=0;armBump()}
+function reveal(){hidden=false;nat({on:false});pc.style.transition='opacity '+S.appear+'ms linear';pc.style.opacity=1}
+function begin(){
+  testing=false;$('#tbtn').textContent='Test the tap sensor';$('#tout').textContent='';nat({on:false});
+  if(S.tap)hide();else{hidden=false;pc.style.opacity=1}
+}
 $('#go').onclick=()=>{
   if(!IMG.card)return;
   $('#pbg').style.backgroundImage=IMG.bg?`url(${IMG.bg})`:'none';
-  pc.src=IMG.card;pc.style.transition='none';dx=0;dy=0;ptr.clear();two=false;P.classList.add('show');show();
+  pc.src=IMG.card;pc.style.transition='none';dx=0;dy=0;ptr.clear();two=false;P.classList.add('show');show();begin();
 };
 P.addEventListener('pointerdown',e=>{
   P.setPointerCapture(e.pointerId);ptr.set(e.pointerId,1);
-  if(ptr.size===1&&!two){pc.style.transition='none';smp=[];start={x:e.clientX,y:e.clientY,dx,dy};axis=null}
-  else if(ptr.size>=2&&!two){two=true;start=null;timer=setTimeout(()=>{timer=null;P.classList.remove('show')},900)}
+  if(ptr.size===1&&!two&&!hidden){pc.style.transition='none';smp=[];start={x:e.clientX,y:e.clientY,dx,dy};axis=null}
+  else if(ptr.size>=2&&!two){two=true;start=null;timer=setTimeout(()=>{timer=null;P.classList.remove('show');nat({on:false});clearTimeout(armT)},900)}
 });
 P.addEventListener('pointermove',e=>{
   if(!start||two||!ptr.has(e.pointerId))return;
@@ -313,7 +338,10 @@ function finish(e){
 const pup=e=>{
   if(!ptr.delete(e.pointerId))return;
   if(two){
-    if(timer){clearTimeout(timer);timer=null;pc.style.transition='none';dx=0;dy=0;show()}
+    if(timer){clearTimeout(timer);timer=null;
+      if(hidden)reveal();
+      else{pc.style.transition='none';dx=0;dy=0;show();if(S.tap)hide()}
+    }
     if(ptr.size===0){two=false}
   }else{if(start)finish(e);start=null}
 };
