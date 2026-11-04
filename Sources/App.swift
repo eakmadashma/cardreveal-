@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import CoreMotion
 
 @main
 struct CardRevealApp: App {
@@ -46,12 +47,49 @@ final class QuitHandler: NSObject, WKScriptMessageHandler {
     }
 }
 
+/// Listens for a sharp knock or tap on the phone and tells the page about it.
+/// The page sends {on: Bool, th: Double}: turn listening on/off and set the strength (in g).
+final class BumpHandler: NSObject, WKScriptMessageHandler {
+    weak var webView: WKWebView?
+    private let motion = CMMotionManager()
+    private var threshold = 1.0
+    private var lastFire = Date.distantPast
+
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        guard let d = message.body as? [String: Any] else { return }
+        if let th = d["th"] as? Double { threshold = th }
+        if (d["on"] as? Bool) == true { start() } else { stop() }
+    }
+
+    private func start() {
+        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
+        lastFire = Date()
+        motion.deviceMotionUpdateInterval = 1.0 / 100.0
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
+            guard let self, let a = m?.userAcceleration else { return }
+            let mag = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()
+            guard mag >= self.threshold,
+                  Date().timeIntervalSince(self.lastFire) > 0.6 else { return }
+            self.lastFire = Date()
+            self.webView?.evaluateJavaScript("window.onBump && window.onBump(\(mag))")
+        }
+    }
+
+    private func stop() {
+        if motion.isDeviceMotionActive { motion.stopDeviceMotionUpdates() }
+    }
+}
+
 struct WebContainer: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.setURLSchemeHandler(LocalHandler(), forURLScheme: "app")
         config.userContentController.add(QuitHandler(), name: "quit")
+        let bump = BumpHandler()
+        config.userContentController.add(bump, name: "bump")
         let web = WKWebView(frame: .zero, configuration: config)
+        bump.webView = web
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.scrollView.bounces = false
         web.isOpaque = false
