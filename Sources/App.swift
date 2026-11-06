@@ -6,7 +6,7 @@ import CoreMotion
 struct CardRevealApp: App {
     var body: some Scene {
         WindowGroup {
-            WebContainer()
+            WebView()
                 .background(Color.black.ignoresSafeArea())
                 .ignoresSafeArea()
                 .statusBarHidden(true)
@@ -17,79 +17,58 @@ struct CardRevealApp: App {
     }
 }
 
-/// Serves the bundled index.html under app://local so localStorage and IndexedDB work.
-final class LocalHandler: NSObject, WKURLSchemeHandler {
-    func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
-        guard let url = urlSchemeTask.request.url,
-              let file = Bundle.main.url(forResource: "index", withExtension: "html"),
-              let data = try? Data(contentsOf: file) else {
-            urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
-            return
-        }
-        let response = URLResponse(url: url, mimeType: "text/html",
-                                   expectedContentLength: data.count,
-                                   textEncodingName: "utf-8")
-        urlSchemeTask.didReceive(response)
-        urlSchemeTask.didReceive(data)
-        urlSchemeTask.didFinish()
-    }
-    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
-}
-
-/// The page calls this when the card has been pulled out and "close the app" is on.
-/// It sends the app back to the Home Screen, then quits the process so it is fully closed.
-final class QuitHandler: NSObject, WKScriptMessageHandler {
-    func userContentController(_ userContentController: WKUserContentController,
-                               didReceive message: WKScriptMessage) {
-        UIControl().sendAction(#selector(URLSessionTask.suspend),
-                               to: UIApplication.shared, for: nil)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { exit(0) }
-    }
-}
-
-/// Listens for a sharp knock or tap on the phone and tells the page about it.
-/// The page sends {on: Bool, th: Double}: turn listening on/off and set the strength (in g).
-final class BumpHandler: NSObject, WKScriptMessageHandler {
-    weak var webView: WKWebView?
+/// One helper for everything the page needs from the phone:
+/// serves index.html at app://local, quits the app on "quit",
+/// and listens for knocks on "bump", replying with window.onBump(g).
+final class Bridge: NSObject, WKURLSchemeHandler, WKScriptMessageHandler {
+    weak var web: WKWebView?
     private let motion = CMMotionManager()
     private var threshold = 1.0
-    private var lastFire = Date.distantPast
+    private var last = Date()
 
-    func userContentController(_ userContentController: WKUserContentController,
-                               didReceive message: WKScriptMessage) {
-        guard let d = message.body as? [String: Any] else { return }
-        if let th = d["th"] as? Double { threshold = th }
-        if (d["on"] as? Bool) == true { start() } else { stop() }
-    }
-
-    private func start() {
-        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
-        lastFire = Date()
-        motion.deviceMotionUpdateInterval = 1.0 / 100.0
-        motion.startDeviceMotionUpdates(to: .main) { [weak self] m, _ in
-            guard let self, let a = m?.userAcceleration else { return }
-            let mag = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()
-            guard mag >= self.threshold,
-                  Date().timeIntervalSince(self.lastFire) > 0.6 else { return }
-            self.lastFire = Date()
-            self.webView?.evaluateJavaScript("window.onBump && window.onBump(\(mag))")
+    func webView(_ webView: WKWebView, start task: WKURLSchemeTask) {
+        guard let url = task.request.url,
+              let file = Bundle.main.url(forResource: "index", withExtension: "html"),
+              let data = try? Data(contentsOf: file) else {
+            return task.didFailWithError(URLError(.fileDoesNotExist))
         }
+        task.didReceive(URLResponse(url: url, mimeType: "text/html",
+                                    expectedContentLength: data.count, textEncodingName: "utf-8"))
+        task.didReceive(data)
+        task.didFinish()
     }
+    func webView(_ webView: WKWebView, stop task: WKURLSchemeTask) {}
 
-    private func stop() {
-        if motion.isDeviceMotionActive { motion.stopDeviceMotionUpdates() }
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "quit" {
+            UIControl().sendAction(#selector(URLSessionTask.suspend), to: UIApplication.shared, for: nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { exit(0) }
+            return
+        }
+        let body = message.body as? [String: Any]
+        threshold = body?["th"] as? Double ?? threshold
+        guard body?["on"] as? Bool == true else { return motion.stopDeviceMotionUpdates() }
+        guard motion.isDeviceMotionAvailable, !motion.isDeviceMotionActive else { return }
+        last = Date()
+        motion.deviceMotionUpdateInterval = 0.01
+        motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
+            guard let self, let a = data?.userAcceleration else { return }
+            let g = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()
+            guard g >= self.threshold, Date().timeIntervalSince(self.last) > 0.6 else { return }
+            self.last = Date()
+            self.web?.evaluateJavaScript("window.onBump&&window.onBump(\(g))")
+        }
     }
 }
 
-struct WebContainer: UIViewRepresentable {
+struct WebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
+        let bridge = Bridge()
         let config = WKWebViewConfiguration()
-        config.setURLSchemeHandler(LocalHandler(), forURLScheme: "app")
-        config.userContentController.add(QuitHandler(), name: "quit")
-        let bump = BumpHandler()
-        config.userContentController.add(bump, name: "bump")
+        config.setURLSchemeHandler(bridge, forURLScheme: "app")
+        for name in ["quit", "bump"] { config.userContentController.add(bridge, name: name) }
         let web = WKWebView(frame: .zero, configuration: config)
-        bump.webView = web
+        bridge.web = web
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.scrollView.bounces = false
         web.isOpaque = false
@@ -98,5 +77,5 @@ struct WebContainer: UIViewRepresentable {
         web.load(URLRequest(url: URL(string: "app://local/index.html")!))
         return web
     }
-    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    func updateUIView(_ web: WKWebView, context: Context) {}
 }
