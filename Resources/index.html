@@ -209,7 +209,7 @@ const arm=()=>{clearTimeout(at);at=setTimeout(()=>nat('bump',{on:true,th:S.th}),
 const hide=()=>{hid=1;pc.style.transition='none';pc.style.opacity=0;arm()};
 const reveal=()=>{hid=0;nat('bump',{on:false});pc.style.transition=`opacity ${S.appear}ms linear`;pc.style.opacity=1};
 const reset=()=>{if(hid)return reveal();pc.style.transition='none';dx=dy=0;move();if(S.tap)hide()};
-window.onBump=g=>{if(testing)$('#tout').textContent=`Detected ${g.toFixed(1)} g (needs ${S.th} g)`;else if(S.tap&&hid&&P.classList.contains('show')&&Date.now()-wake>2000)reveal()};
+window.onBump=g=>{if(testing)$('#tout').textContent=`Detected ${g.toFixed(1)} g (needs ${S.th} g)`;else if(S.tap&&hid&&P.classList.contains('show')&&Date.now()-wake>1200)reveal()};
 document.onvisibilitychange=()=>{ /* locked or switched away: stop listening; on return, wait 2s before trusting a knock */
  if(document.hidden)return nat('bump',{on:false});
  wake=Date.now();if(S.tap&&hid&&P.classList.contains('show'))arm();
