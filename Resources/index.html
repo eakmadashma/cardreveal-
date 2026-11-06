@@ -86,10 +86,10 @@ input[type=file]{display:none}
   <div class="slot">
     <h2>3. Match real life</h2><small>Do this once so the on-screen card is exactly the size of a real card, in the spot where you hold it.</small>
     <div class="row"><button class="btn" id="calbtn">Calibrate size and position</button></div>
-    <div class="chk"><input type="checkbox" id="lock"><label for="lock">Lock dragging to one direction at a time</label></div>
+    
     <div class="chk"><input type="checkbox" id="fin"><label for="fin">Finish the pull-out automatically when I let go</label></div>
     <div class="chk"><label for="dur">Slide-off time</label><input type="range" id="dur" min="120" max="700" step="10" style="flex:1"><span id="durv"></span></div>
-    <div class="chk"><label for="low">Start lower by</label><input type="range" id="low" min="0" max="200" step="2" style="flex:1"><span id="lowv"></span></div>
+    
     <div class="chk"><input type="checkbox" id="quit"><label for="quit">Close the app after the card is pulled out (needs auto-finish on; installed app only)</label></div>
     <div class="chk"><label for="qd">Close delay</label><input type="range" id="qd" min="0" max="3000" step="50" style="flex:1"><span id="qdv"></span></div>
     <div class="chk"><input type="checkbox" id="tap"><label for="tap">Card appears when I tap the phone against something (installed app only)</label></div>
@@ -100,7 +100,7 @@ input[type=file]{display:none}
   </div>
 
   <button class="btn primary big" id="go" disabled>Perform</button>
-  <p class="tip">While performing: drag with one finger. Tap with two fingers to put the card back in place, or hold two fingers for a second to exit. Calibrate and perform from the Home Screen icon (Share, then Add to Home Screen) so Safari’s bars don’t shift the position.</p>
+  <p class="tip">While performing: drag with one finger. Tap with three fingers to bring the card back to the middle (or, with the tap option on, hide it so the next phone tap makes it appear again). Hold two fingers for a second to exit.</p>
 </main>
 
 <div class="full" id="crop">
@@ -139,9 +139,10 @@ const TYPES={
 };
 function dims(){return S.type==='custom'?{w:S.cw,h:S.ch}:TYPES[S.type]}
 const PPM0=153.33/25.4; /* CSS pixels per mm on 460 ppi, 3x iPhones */
-let S={type:'poker',shape:'round',cw:50,ch:50,lock:false,fin:true,dur:260,low:40,quit:false,qdelay:300,tap:false,th:1,appear:120,scale:1,ox:0,oy:0};
+let S={type:'poker',shape:'round',cw:50,ch:50,fin:true,dur:260,quit:false,qdelay:300,tap:false,th:1,appear:120,scale:1,ox:0,oy:0};
 try{Object.assign(S,JSON.parse(localStorage.getItem('cr_s')||'{}'))}catch(e){}
 const saveS=()=>{try{localStorage.setItem('cr_s',JSON.stringify(S))}catch(e){}};
+if('low' in S){S.oy+=S.low||0;delete S.low;saveS()}
 const IMG={card:null,bg:null};
 
 let _db;
@@ -168,9 +169,9 @@ $('#shape').value=S.shape;$('#shape').onchange=e=>{S.shape=e.target.value;saveS(
 $('#cw').value=S.cw;$('#ch').value=S.ch;
 $('#cw').oninput=e=>{S.cw=Math.max(5,+e.target.value||5);saveS()};
 $('#ch').oninput=e=>{S.ch=Math.max(5,+e.target.value||5);saveS()};
-$('#lock').checked=S.lock;$('#lock').onchange=e=>{S.lock=e.target.checked;saveS()};
+
 $('#fin').checked=S.fin;$('#fin').onchange=e=>{S.fin=e.target.checked;saveS()};
-$('#low').value=S.low;$('#lowv').textContent=S.low+' px';$('#low').oninput=e=>{S.low=+e.target.value;$('#lowv').textContent=S.low+' px';saveS()};
+
 $('#quit').checked=S.quit;$('#quit').onchange=e=>{S.quit=e.target.checked;saveS()};
 $('#qd').value=S.qdelay;$('#qdv').textContent=S.qdelay+' ms';$('#qd').oninput=e=>{S.qdelay=+e.target.value;$('#qdv').textContent=S.qdelay+' ms';saveS()};
 $('#tap').checked=S.tap;$('#tap').onchange=e=>{S.tap=e.target.checked;saveS()};
@@ -268,7 +269,7 @@ function warp(src,pts,W,H){
 function place(el,host,dx,dy){
   const t=dims(),ppm=PPM0*S.scale,w=t.w*ppm,h=t.h*ppm;
   el.style.width=w+'px';el.style.height=h+'px';
-  el.style.transform=`translate(${(host.clientWidth-w)/2+S.ox+dx}px,${(host.clientHeight-h)/2+S.oy+S.low+dy}px)`;
+  el.style.transform=`translate(${(host.clientWidth-w)/2+S.ox+dx}px,${(host.clientHeight-h)/2+S.oy+dy}px)`;
 }
 
 /* ---- calibrate ---- */
@@ -288,7 +289,7 @@ const cend=()=>{cdrag=null};CAL.addEventListener('pointerup',cend);CAL.addEventL
 
 /* ---- perform ---- */
 const P=$('#perform'),pc=$('#pc'),ptr=new Map();
-let dx=0,dy=0,start=null,axis=null,two=false,timer=null,smp=[],hidden=false,armT=null;
+let dx=0,dy=0,start=null,axis=null,two=false,timer=null,smp=[],hidden=false,armT=null,maxp=0;
 const show=()=>place(pc,P,dx,dy);
 function armBump(){clearTimeout(armT);armT=setTimeout(()=>nat({on:true,th:S.th}),800)}
 function hide(){hidden=true;pc.style.transition='none';pc.style.opacity=0;armBump()}
@@ -303,17 +304,13 @@ $('#go').onclick=()=>{
   pc.src=IMG.card;pc.style.transition='none';dx=0;dy=0;ptr.clear();two=false;P.classList.add('show');show();begin();
 };
 P.addEventListener('pointerdown',e=>{
-  P.setPointerCapture(e.pointerId);ptr.set(e.pointerId,1);
+  P.setPointerCapture(e.pointerId);ptr.set(e.pointerId,1);maxp=Math.max(maxp,ptr.size);
   if(ptr.size===1&&!two&&!hidden){pc.style.transition='none';smp=[];start={x:e.clientX,y:e.clientY,dx,dy};axis=null}
-  else if(ptr.size>=2&&!two){two=true;start=null;timer=setTimeout(()=>{timer=null;P.classList.remove('show');nat({on:false});clearTimeout(armT)},900)}
+  else if(ptr.size>=2&&!two){two=true;start=null;timer=setTimeout(()=>{timer=null;if(maxp<3){P.classList.remove('show');nat({on:false});clearTimeout(armT)}},900)}
 });
 P.addEventListener('pointermove',e=>{
   if(!start||two||!ptr.has(e.pointerId))return;
   let mx=e.clientX-start.x,my=e.clientY-start.y;
-  if(S.lock){
-    if(!axis&&Math.max(Math.abs(mx),Math.abs(my))>10)axis=Math.abs(mx)>Math.abs(my)?'x':'y';
-    if(axis==='x')my=0;else if(axis==='y')mx=0;else{mx=0;my=0}
-  }
   dx=start.dx+mx;dy=start.dy+my;show();
   const n=performance.now();smp.push([n,e.clientX,e.clientY]);while(smp.length&&n-smp[0][0]>250)smp.shift();
 });
@@ -328,9 +325,9 @@ function finish(e){
   if(smp.length>1){const a=smp[0],b=smp[smp.length-1],vx=b[1]-a[1],vy=b[2]-a[2],m=Math.hypot(vx,vy);if(m>8){ux=vx/m;uy=vy/m}}
   const ang=Math.atan2(Math.abs(uy),Math.abs(ux))*57.3;
   if(ang<30){ux=Math.sign(ux)||1;uy=0}else if(ang>60){uy=Math.sign(uy)||1;ux=0}
-  if(S.lock&&axis==='x'){ux=Math.sign(ux||dx)||1;uy=0}else if(S.lock&&axis==='y'){uy=Math.sign(uy||dy)||1;ux=0}
+  
   let s=0;
-  for(;s<4000;s+=10){const px=(W-w)/2+S.ox+dx+ux*s,py=(H-h)/2+S.oy+S.low+dy+uy*s;if(px>=W||px+w<=0||py>=H||py+h<=0)break}
+  for(;s<4000;s+=10){const px=(W-w)/2+S.ox+dx+ux*s,py=(H-h)/2+S.oy+dy+uy*s;if(px>=W||px+w<=0||py>=H||py+h<=0)break}
   pc.style.transition=`transform ${S.dur}ms cubic-bezier(.2,.7,.3,1)`;
   dx+=ux*(s+10);dy+=uy*(s+10);show();
   if(S.quit)setTimeout(()=>{try{window.webkit.messageHandlers.quit.postMessage(1)}catch(e){}},S.dur+S.qdelay);
@@ -339,10 +336,10 @@ const pup=e=>{
   if(!ptr.delete(e.pointerId))return;
   if(two){
     if(timer){clearTimeout(timer);timer=null;
-      if(hidden)reveal();
+      if(maxp<3){}else if(hidden)reveal();
       else{pc.style.transition='none';dx=0;dy=0;show();if(S.tap)hide()}
     }
-    if(ptr.size===0){two=false}
+    if(ptr.size===0){two=false;maxp=0}
   }else{if(start)finish(e);start=null}
 };
 P.addEventListener('pointerup',pup);P.addEventListener('pointercancel',pup);
