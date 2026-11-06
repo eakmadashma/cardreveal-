@@ -203,12 +203,17 @@ $('#tbtn').onclick=()=>window.webkit?.messageHandlers?.bump?test(!testing):$('#t
 
 /* perform */
 const P=$('#perform'),pc=$('#pc'),ptr=new Set();
-let dx=0,dy=0,st=0,smp=[],hid=0,two=0,tm=0,at=0;
+let dx=0,dy=0,st=0,smp=[],hid=0,two=0,tm=0,at=0,wake=0;
 const move=()=>place(pc,P,dx,dy);
-const hide=()=>{hid=1;pc.style.transition='none';pc.style.opacity=0;clearTimeout(at);at=setTimeout(()=>nat('bump',{on:true,th:S.th}),800)};
+const arm=()=>{clearTimeout(at);at=setTimeout(()=>nat('bump',{on:true,th:S.th}),800)};
+const hide=()=>{hid=1;pc.style.transition='none';pc.style.opacity=0;arm()};
 const reveal=()=>{hid=0;nat('bump',{on:false});pc.style.transition=`opacity ${S.appear}ms linear`;pc.style.opacity=1};
 const reset=()=>{if(hid)return reveal();pc.style.transition='none';dx=dy=0;move();if(S.tap)hide()};
-window.onBump=g=>{if(testing)$('#tout').textContent=`Detected ${g.toFixed(1)} g (needs ${S.th} g)`;else if(S.tap&&hid&&P.classList.contains('show'))reveal()};
+window.onBump=g=>{if(testing)$('#tout').textContent=`Detected ${g.toFixed(1)} g (needs ${S.th} g)`;else if(S.tap&&hid&&P.classList.contains('show')&&Date.now()-wake>2000)reveal()};
+document.onvisibilitychange=()=>{ /* locked or switched away: stop listening; on return, wait 2s before trusting a knock */
+ if(document.hidden)return nat('bump',{on:false});
+ wake=Date.now();if(S.tap&&hid&&P.classList.contains('show'))arm();
+};
 $('#go').onclick=()=>{
  $('#pbg').style.backgroundImage=IMG.bg?`url(${IMG.bg})`:'none';
  pc.src=IMG.card;dx=dy=0;ptr.clear();two=st=0;test(0);vis('#perform');move();
